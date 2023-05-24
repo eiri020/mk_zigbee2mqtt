@@ -1,0 +1,9 @@
+.env
+
+devices.json
+
+node_modules
+spool
+
+coverage
+dist

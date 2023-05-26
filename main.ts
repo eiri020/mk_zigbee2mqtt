@@ -118,7 +118,7 @@ export async function main() {
     clientId: process.env.MQTT_CLIENT ?? 'checkmk_zigbee2mqtt',
   });
 
-  client.on('connect', function () {
+  client.on('connect', () => {
 
     console.info(`Subscribing to MQTT topic ${process.env.ZIGBEE2MQTT_TOPIC}/# ...`);
 
@@ -196,7 +196,9 @@ export function syncDevices(devices: any[]) {
     
     if(!z) {
       const name = d.friendly_name ?? d.ieee_address;
-      zigbeeDevices.set(name, new ZigbeeDevice(d));
+      const z = new ZigbeeDevice(d)
+      zigbeeDevices.set(name, z);
+      z.writeSpool();
       n++;
     }
   });  

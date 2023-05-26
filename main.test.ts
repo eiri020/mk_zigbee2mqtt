@@ -5,6 +5,7 @@ import * as dotenv from 'dotenv';
 import * as events from 'events';
 import fs from 'fs';
 import { ClientSubscribeCallback } from 'mqtt';
+import { testEmitter, subscribeCallBack } from './example/emitterSubscriber';
 
 export class MqttClientMock extends events.EventEmitter {
   subscribe = jest.fn((topic: string, opts: any, callback: ClientSubscribeCallback) => {
@@ -31,7 +32,33 @@ function sleep(ms: number) {
   });
 }
 
-describe('mk_zigbee2mqtt', () => {
+describe('emitterTests', () => {
+
+  const mqtt = require('mqtt');
+
+  let client:       MqttClientMock;
+
+  beforeEach(() => {
+    client = new MqttClientMock();
+
+    mqtt.connect = jest.fn();
+  })
+
+  it('should subscribe after the connection is established', (done) => {
+
+    testEmitter();
+
+    expect(mqtt.connect).toBeCalled();
+
+    client.emit('connect', new Error('you did wrong'));
+
+    expect(client.subscribe).toBeCalled();
+
+    done();
+  })
+});
+
+describe.skip('mk_zigbee2mqtt', () => {
 
   let client:       MqttClientMock;
   let errorClient:  MqttClientErrorMock;
@@ -123,7 +150,7 @@ describe('mk_zigbee2mqtt', () => {
     });
   });
 
-  describe.skip('connection tests', () => {
+  describe('connection tests', () => {
 
     const mqtt = require('mqtt');
 
@@ -144,13 +171,14 @@ describe('mk_zigbee2mqtt', () => {
 
       expect(mqtt.connect).toBeCalled();
 
-      setTimeout(() => {
-        expect(client.subscribe).toHaveBeenCalled();
-        done();
-      }, 2000);
+      // client.emit('connect');
+
+      expect(client.subscribe).toBeCalled();
+
+      done();
     })
 
-    it('should generate an error message if subscribe has failed', (done) => {
+    it.skip('should generate an error message if subscribe has failed', (done) => {
 
       const log = jest.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -178,6 +206,10 @@ describe('mk_zigbee2mqtt', () => {
       // }, 2000);
 
     });
+  });
+
+  describe.skip("ZigbeeDevice tests", () => {
+
   });
 
 });

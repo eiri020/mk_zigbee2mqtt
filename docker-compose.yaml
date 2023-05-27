@@ -1,0 +1,18 @@
+version: '3.8'
+services:
+  mk_zigbee2mqtt:
+    container_name: mk_zigbee2mqtt
+    restart: unless-stopped
+    image: mk_zigbee2mqtt
+    volumes:
+      - /usr/lib/mk_check_mk_agent:/app/spool
+    environment:
+      MQTT_URL: "mqtt://moquitto_url"
+      MQTT_USER: "mosquitto_user"
+      MQTT_PASS: /run/secrets/mosquitto_passwd
+      MQTT_CLIENT: checkmk_zigbee2mqtt
+      ZIGBEE2MQTT_TOPIC: zigbee2mqtt
+      CHECKMK_PIGGYBAG: zigbee2mqtt
+      SPOOL_DIR: /app/spool
+    secrets:
+      - mosquitto_passwd

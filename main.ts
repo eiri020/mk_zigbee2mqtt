@@ -3,7 +3,7 @@ import fs from 'fs';
 import assert from 'assert';
 
 export class ZigbeeDevice {
-  public availability: string;
+  private _availability: string;
   public availabilityDate?: Date;
 
   public stateDate?: Date;
@@ -23,22 +23,17 @@ export class ZigbeeDevice {
     return this.batteryDef ? this.state?.battery ?? 0 : 0;
   }
 
-  public get linkQuality() {
-    return this.linkQualityDef ? this.state?.linkquality ?? 0 : 0;
-  }
-
   public get maxAge() {
     return this.device.type === 'Coordinator' || this.device.type === 'Router' ? 10 * 60 : 25 * 3600;
   }
 
-  private get batteryDef() {
+  public get batteryDef() {
     return this.device.definition?.exposes?.find(e => e.property === 'battery' && e.type === 'numeric')
   }
 
-  private get linkQualityDef() {
-    return this.device.definition?.exposes?.find(e => e.property === 'linkquality' && e.type === 'numeric')
+  public get availability() {
+    return this._availability ?? 'unknown';
   }
-
 
   constructor(device: any) 
   {
@@ -49,13 +44,15 @@ export class ZigbeeDevice {
     this.device = device;
   }
 
-  setAvailabity(availability: string) {
-    this.availability = availability;
+  setAvailability(availability: string) {
+    this._availability = availability;
     this.availabilityDate = new Date();
+    this.writeSpool();
   }
 
   setState(state: any) {
     this.state = state;
+    this.writeSpool();
   }
 
   writeSpool() {
@@ -96,7 +93,7 @@ export class ZigbeeDevice {
 export const zigbeeDevices = new Map<string,ZigbeeDevice>();
 
 
-export async function main() {
+export function main() {
 
   assert(process.env.MQTT_URL != undefined, 'Environment MQTT_URL should point to Masquitto server');
 
@@ -138,7 +135,7 @@ export async function main() {
   });
 
   client.on('error', (error) => {
-    console.info(`MQTT Error ${error}`);
+    console.error(`MQTT Error ${error}`);
   });
 
   client.on('message', (topic: string, message: Buffer) => {
@@ -151,7 +148,7 @@ export async function main() {
 
         case `${process.env.ZIGBEE2MQTT_TOPIC}/bridge/state`:
           if(zigbeeDevices.size > 0)
-            zigbeeDevices.get('Coordinator').setAvailabity(message.toString())
+            zigbeeDevices.get('Coordinator').setAvailability(message.toString())
           break;
 
         default:
@@ -200,6 +197,8 @@ export function syncDevices(devices: any[]) {
       zigbeeDevices.set(name, z);
       z.writeSpool();
       n++;
+    } else {
+      z.writeSpool();
     }
   });  
 
@@ -220,7 +219,6 @@ export function syncDeviceState(topic: string, message: Buffer) {
     const z = zigbeeDevices.get(device);
     if(z) {
       z.setState(JSON.parse(message.toString()));
-      z.writeSpool();
     }
   }
 }
@@ -233,8 +231,7 @@ export function syncDeviceAvailability(topic: string, availability: string) {
 
     const z = zigbeeDevices.get(device);
     if(z) {
-      z.setAvailabity(availability);
-      z.writeSpool();
+      z.setAvailability(availability);
     }
   }
 }

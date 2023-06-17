@@ -82,7 +82,7 @@ export class ZigbeeDevice {
 
     lines.push(`${state} ${this.name} ${metrics.length ? metrics.join('|') : '-'} Zigbee device ${this.name} state is ${this.availability}`);
 
-    fs.writeFile(`${process.env.SPOOL_DIR}/${this.maxAge}_${this.name}.txt`, lines.join('\n'), err => {
+    fs.writeFile(`${process.env.SPOOL_DIR}/${this.maxAge}_${this.name}.txt`, lines.join('\n')+'\n', err => {
       if (err) {
         console.error(err);
       }

@@ -2,7 +2,7 @@
   "name": "mk_zigbee2mqtt",
   "version": "0.0.1",
   "description": "CheckMk Zigbee2Mqtt monitor",
-  "main": "index.js",
+  "main": "dist/index.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/eiri020/mk_zigbee2mqtt.git"

@@ -1,6 +1,6 @@
 
 import { AssertionError } from 'assert';
-import { ZigbeeDevice, main, syncDevices, zigbeeDevices } from './main';
+import { ZigbeeDevice, main, zigbeeDevices } from './main';
 import * as dotenv from 'dotenv';
 import * as events from 'events';
 import fs from 'fs';

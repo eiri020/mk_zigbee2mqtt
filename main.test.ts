@@ -515,28 +515,45 @@ describe('mk_zigbee2mqtt', () => {
       expect(z.battery).toBe(zigbeeState.battery);
     })
 
-    it('should a max age of 600 if the device is a Coordinator', () => {
+    it('should set max age of from environment ROUTER_MAXAGE if the device is a Coordinator', () => {
+      process.env.ROUTER_MAXAGE = '62321';
+
       const zd = JSON.parse(JSON.stringify(zigbeeData));
       zd.type = 'Coordinator';
       const z = new ZigbeeDevice(zd);
   
-      expect(z.maxAge).toBe(600);
+      expect(z.maxAge).toBe(62321);
     });
 
-    it('should a max age of 600 if the device is a Router', () => {
+    it('should set max age of 6000 if environment ROUTER_MAXAGE is not a number', () => {
+      process.env.ROUTER_MAXAGE = 'abc';
+
       const zd = JSON.parse(JSON.stringify(zigbeeData));
       zd.type = 'Coordinator';
       const z = new ZigbeeDevice(zd);
   
-      expect(z.maxAge).toBe(600);
+      expect(z.maxAge).toBe(6000);
     });
 
-    it('should a max age of 25 hours if the device is not a Router or Coordinatorr', () => {
+    it('should set max age from environment DEVICE_MAXAGE if the device is not a Router or Coordinatorr', () => {
+
+      process.env.DEVICE_MAXAGE = '6435'
+
       const zd = JSON.parse(JSON.stringify(zigbeeData));
       zd.type = 'EndDevice';
       const z = new ZigbeeDevice(zd);
   
-      expect(z.maxAge).toBe(25 * 3600);
+      expect(z.maxAge).toBe(6435);
+    });
+
+    it('should set max age of 90000 if environment DEVICE_MAXAGE is not a number', () => {
+      process.env.DEVICE_MAXAGE = 'abc';
+
+      const zd = JSON.parse(JSON.stringify(zigbeeData));
+      zd.type = 'EndDevice';
+      const z = new ZigbeeDevice(zd);
+  
+      expect(z.maxAge).toBe(90000);
     });
 
     it('should return unknown availability if not set', () => {

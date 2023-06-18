@@ -2,6 +2,18 @@ import * as mqtt from 'mqtt';
 import fs from 'fs';
 import assert from 'assert';
 
+function tryParseInt(str: string, defaultValue: number) {
+  var retValue = defaultValue;
+  if(str !== null) {
+    if(str != undefined && str.length > 0) {
+      if (!isNaN(parseInt(str))) {
+              retValue = parseInt(str);
+          }
+      }
+  }
+  return retValue;
+}
+
 export class ZigbeeDevice {
   private _availability: string;
   public availabilityDate?: Date;
@@ -24,7 +36,11 @@ export class ZigbeeDevice {
   }
 
   public get maxAge() {
-    return this.device.type === 'Coordinator' || this.device.type === 'Router' ? 10 * 60 : 25 * 3600;
+    if(this.device.type === 'Coordinator' || this.device.type === 'Router') {
+      return tryParseInt(process.env.ROUTER_MAXAGE,6000);
+    } else {
+      return tryParseInt(process.env.DEVICE_MAXAGE,90000);
+    }
   }
 
   public get batteryDef() {
@@ -126,6 +142,13 @@ export function main() {
         console.error(`Error subscribing to devices topic ${process.env.ZIGBEE2MQTT_TOPIC}/#: ${err}`);
       }
     });
+
+    client.subscribe(`${process.env.ZIGBEE2MQTT_TOPIC}/bridge/state`, { rh: 1, qos: 0 }, function (err) {
+      if (err) {
+        console.error(`Error subscribing to devices topic ${process.env.ZIGBEE2MQTT_TOPIC}/#: ${err}`);
+      }
+    });
+
   });
 
   client.on('disconnect', () => {

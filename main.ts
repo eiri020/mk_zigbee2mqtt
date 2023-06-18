@@ -57,6 +57,8 @@ export class ZigbeeDevice {
 
   writeSpool() {
 
+    console.log(`writing spool file for ${this.name}`);
+
     const lines: string[] = [];
     const metrics: string[] = [];
 

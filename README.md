@@ -16,6 +16,8 @@ MQTT_CLIENT=checkmk_zigbee2mqtt
 ZIGBEE2MQTT_TOPIC=zigbee2mqtt
 CHECKMK_PIGGYBAG=zigbee2mqtt
 SPOOL_DIR='/usr/lib/mk_check_mk_agent'
+ROUTER_MAXAGE=18000
+DEVICE_MAXAGE=90000
 ```
 
 ## Running local

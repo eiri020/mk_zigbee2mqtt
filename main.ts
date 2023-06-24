@@ -1,6 +1,8 @@
 import * as mqtt from 'mqtt';
 import fs from 'fs';
 import assert from 'assert';
+import { globSync } from 'glob';
+import { createLogger, format, transports, Logger } from 'winston';
 
 function tryParseInt(str: string, defaultValue: number) {
   var retValue = defaultValue;
@@ -22,6 +24,7 @@ export class ZigbeeDevice {
 
   public device: any;
   public state?: any;
+  public logger: Logger;
 
   public get name() {
     return this.device.friendly_name ?? this.device.ieee_address;
@@ -51,8 +54,9 @@ export class ZigbeeDevice {
     return this._availability ?? 'unknown';
   }
 
-  constructor(device: any) 
+  constructor(device: any, logger: Logger) 
   {
+    this.logger = logger;
     this.syncDevice(device);
   }
 
@@ -73,7 +77,16 @@ export class ZigbeeDevice {
 
   writeSpool() {
 
-    console.log(`writing spool file for ${this.name}`);
+    const existing = globSync(`${process.env.SPOOL_DIR}/*_${this.name}.txt`);
+    existing.forEach(e => {
+      try {
+        fs.unlinkSync(e)
+      } catch(err: any) {
+        this.logger.error(` unkinking file ${e}: ${err.message}`);
+      }
+    });
+
+    this.logger.info(`writing spool file for ${this.name}`);
 
     const lines: string[] = [];
     const metrics: string[] = [];
@@ -85,7 +98,7 @@ export class ZigbeeDevice {
     lines.push(`<<<<${process.env.CHECKMK_PIGGYBAG}>>>>`);
     lines.push('<<<local>>>');
 
-    let state = 3;
+    let state;
     switch(this.availability) {
       case 'online':
         state = 0;
@@ -102,7 +115,7 @@ export class ZigbeeDevice {
 
     fs.writeFile(`${process.env.SPOOL_DIR}/${this.maxAge}_${this.name}.txt`, lines.join('\n')+'\n<<<<>>>>\n', err => {
       if (err) {
-        console.error(err);
+        this.logger.error(err);
       }
     });
   }
@@ -110,8 +123,23 @@ export class ZigbeeDevice {
 
 export const zigbeeDevices = new Map<string,ZigbeeDevice>();
 
+export const logger = createLogger({ 
+  level: 'info', 
+  format: format.combine(
+    format.timestamp({
+      format: 'YYYY-MM-DD HH:mm:ss'
+    }),
+    format.printf(info => `${info.timestamp} ${info.level}: ${info.message}`+(info.splat!==undefined?`${info.splat}`:" "))
+  ),
+  transports: [
+    new transports.Console(),
+  ],
+});
+
 
 export function main() {
+
+  logger.info('Starting mk_zigbee2mqtt');
 
   assert(process.env.MQTT_URL != undefined, 'Environment MQTT_URL should point to Masquitto server');
 
@@ -119,13 +147,14 @@ export function main() {
   process.env.CHECKMK_PIGGYBAG ??= 'zigbee2mqtt';
   process.env.SPOOL_DIR ??= '/usr/lib/check_mk_agent/spool';
 
-  console.info(`Verifying spool directory ${process.env.SPOOL_DIR} ...`);
+  logger.info(`Verifying spool directory ${process.env.SPOOL_DIR} ...`);
 
   if (!fs.existsSync(process.env.SPOOL_DIR)) {
+    logger.info(`Creating spool directory ${process.env.SPOOL_DIR} ...`);
     fs.mkdirSync(process.env.SPOOL_DIR, { recursive: true });
   }
 
-  console.info(`Connecting to MQTT Server ${process.env.MQTT_URL} ...`);
+  logger.info(`Connecting to MQTT Server ${process.env.MQTT_URL} ...`);
 
   const client  = mqtt.connect(process.env.MQTT_URL, {
     username: process.env.MQTT_USER,
@@ -135,32 +164,32 @@ export function main() {
 
   client.on('connect', () => {
 
-    console.info(`Subscribing to MQTT topic ${process.env.ZIGBEE2MQTT_TOPIC}/# ...`);
+    logger.info(`Subscribing to MQTT topic ${process.env.ZIGBEE2MQTT_TOPIC}/# ...`);
 
     client.subscribe(`${process.env.ZIGBEE2MQTT_TOPIC}/#`, { rh: 1, qos: 0 }, function (err) {
       if (err) {
-        console.error(`Error subscribing to devices topic ${process.env.ZIGBEE2MQTT_TOPIC}/#: ${err}`);
+        logger.error(`Error subscribing to devices topic ${process.env.ZIGBEE2MQTT_TOPIC}/#: ${err}`);
       }
     });
 
     client.subscribe(`${process.env.ZIGBEE2MQTT_TOPIC}/bridge/state`, { rh: 1, qos: 0 }, function (err) {
       if (err) {
-        console.error(`Error subscribing to devices topic ${process.env.ZIGBEE2MQTT_TOPIC}/#: ${err}`);
+        logger.error(`Error subscribing to devices topic ${process.env.ZIGBEE2MQTT_TOPIC}/#: ${err}`);
       }
     });
 
   });
 
   client.on('disconnect', () => {
-    console.info('Disconnected from MQTT server')
+    logger.info('Disconnected from MQTT server')
   });
 
   client.on('offline', () => {
-    console.info('Client going offline')
+    logger.info('Client going offline')
   });
 
   client.on('error', (error) => {
-    console.error(`MQTT Error ${error}`);
+    logger.error(`MQTT Error ${error}`);
   });
 
   client.on('message', (topic: string, message: Buffer) => {
@@ -168,7 +197,7 @@ export function main() {
     try {
       switch(topic) {
         case `${process.env.ZIGBEE2MQTT_TOPIC}/bridge/devices`:
-          syncDevices(JSON.parse(message.toString()));
+          syncDevices(JSON.parse(message.toString()), logger);
           break;
 
         case `${process.env.ZIGBEE2MQTT_TOPIC}/bridge/state`:
@@ -186,15 +215,15 @@ export function main() {
           }
       }
     } catch(err: any) {
-      console.error(`Error processing topic ${topic}: ${err.message}`);
+      logger.error(`Error processing topic ${topic}: ${err.message}`);
     }
   });
 
 }
 
-export function syncDevices(devices: any[]) {
+export function syncDevices(devices: any[], logger: Logger) {
 
-  console.info('Received devices topic from MQTT')
+  logger.info('Received devices topic from MQTT')
 
   let n = 0;
 
@@ -208,7 +237,7 @@ export function syncDevices(devices: any[]) {
   }
 
   if(n > 0) {
-    console.info(`${n} devices removed`);
+    logger.info(`${n} devices removed`);
   }
 
   n = 0;
@@ -218,7 +247,7 @@ export function syncDevices(devices: any[]) {
     
     if(!z) {
       const name = d.friendly_name ?? d.ieee_address;
-      const z = new ZigbeeDevice(d)
+      const z = new ZigbeeDevice(d, logger)
       zigbeeDevices.set(name, z);
       z.writeSpool();
       n++;
@@ -228,7 +257,7 @@ export function syncDevices(devices: any[]) {
   });  
 
   if(n > 0) {
-    console.info(`${n} devices added`);
+    logger.info(`${n} devices added`);
   }
 
 }

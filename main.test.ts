@@ -1,11 +1,15 @@
 
 import { AssertionError } from 'assert';
-import { ZigbeeDevice, main, zigbeeDevices } from './main';
+import { ZigbeeDevice, main, zigbeeDevices, logger } from './main';
 import * as dotenv from 'dotenv';
 import * as events from 'events';
 import fs from 'fs';
 import { ClientSubscribeCallback } from 'mqtt';
+import { createLogger, format, transports, Logger } from 'winston';
 
+import * as globber from 'glob';
+
+// import { glob } from 'glob';
 class MqttClientMock extends events.EventEmitter {
   subscribe = jest.fn((topic: string, opts: any, callback: ClientSubscribeCallback) => {
     callback(undefined, []);
@@ -189,7 +193,7 @@ describe('mk_zigbee2mqtt', () => {
 
     it('should generate an error message if subscribe has failed', (done) => {
 
-      const log = jest.spyOn(console, 'error').mockImplementation(() => {});
+      jest.spyOn(logger, 'error');
 
       mqtt.connect = jest.fn().mockReturnValue(errorClient)
 
@@ -291,7 +295,7 @@ describe('mk_zigbee2mqtt', () => {
     });
 
     it('should not set the coordinatore state on the main/bridge/state topic if devices are not synced yet', () => {
-      const devices = generateDevices(10, true);
+      generateDevices(10, true);
 
       process.env.ZIGBEE2MQTT_TOPIC = 'main';
 
@@ -396,15 +400,17 @@ describe('mk_zigbee2mqtt', () => {
       expect(device).not.toBeDefined();
     })
 
-    it('should log an error if an exception occures during update', () => {
+    it('should log an error if an exception occurs during update', () => {
 
       const devices = generateDevices(10, true);
 
       process.env.ZIGBEE2MQTT_TOPIC = 'main';
 
       mqtt.connect = jest.fn().mockReturnValue(client);
-      jest.spyOn(ZigbeeDevice.prototype, 'writeSpool').mockImplementation(() => { throw new Error('some error')})
-      const mockLog = jest.spyOn(console, 'error');
+      jest.spyOn(ZigbeeDevice.prototype, 'writeSpool').mockImplementation(() => { 
+        throw new Error('some error')
+      })
+      const mockLog = jest.spyOn(logger, 'error');
 
       main();
 
@@ -413,13 +419,12 @@ describe('mk_zigbee2mqtt', () => {
       client.emit('message', `main/${devices[2].friendly_name}`, JSON.stringify(deviceState));
 
       expect(ZigbeeDevice.prototype.writeSpool).toBeCalled();
-      expect(mockLog).toBeCalled();
+      expect(logger.error).toBeCalled();
       
       const log = mockLog.mock.calls[0][0];
       expect(log).toContain('some error');
 
     });
-
   });
 
   describe("ZigbeeDevice class tests", () => {
@@ -443,7 +448,7 @@ describe('mk_zigbee2mqtt', () => {
     }
 
     it('should return the friend name if both are available', () => {
-      const z = new ZigbeeDevice(zigbeeData);
+      const z = new ZigbeeDevice(zigbeeData, logger);
 
       expect(z.name).toBe(zigbeeData.friendly_name);
     });
@@ -452,7 +457,7 @@ describe('mk_zigbee2mqtt', () => {
       const zd = JSON.parse(JSON.stringify(zigbeeData));
       delete zd.friendly_name;
       
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
 
       expect(z.name).toBe(zigbeeData.ieee_address);
     });
@@ -461,14 +466,14 @@ describe('mk_zigbee2mqtt', () => {
       const zd = JSON.parse(JSON.stringify(zigbeeData));
       delete zd.friendly_name;
       
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
 
       expect(z.type).toBe(zigbeeData.type);
     })
 
     it('should return battery definition if available and numeric', () => {
       const zd = JSON.parse(JSON.stringify(zigbeeData));
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
   
       expect(z.batteryDef).toBeDefined();
     });
@@ -477,7 +482,7 @@ describe('mk_zigbee2mqtt', () => {
       const zd = JSON.parse(JSON.stringify(zigbeeData));
       delete zd.definition;
 
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
   
       expect(z.batteryDef).not.toBeDefined();
     });
@@ -486,7 +491,7 @@ describe('mk_zigbee2mqtt', () => {
     it('should return undefined definition if available but not numeric numeric', () => {
       const zd = JSON.parse(JSON.stringify(zigbeeData));
       zd.definition.exposes[0].type = 'string';
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
   
       expect(z.batteryDef).not.toBeDefined();
     });
@@ -494,21 +499,21 @@ describe('mk_zigbee2mqtt', () => {
     it('should return batterylevel 0 if no valid battery definition exist', () => {
       const zd = JSON.parse(JSON.stringify(zigbeeData));
       zd.definition.exposes[0].type = 'string';
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
   
       expect(z.battery).toBe(0);
     })
 
     it('should return batterylevel 0 if no state is not set yet', () => {
       const zd = JSON.parse(JSON.stringify(zigbeeData));
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
   
       expect(z.battery).toBe(0);
     })
 
     it('should return the batterylevel if state is set', () => {
       const zd = JSON.parse(JSON.stringify(zigbeeData));
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
 
       z.setState(zigbeeState);
   
@@ -520,7 +525,7 @@ describe('mk_zigbee2mqtt', () => {
 
       const zd = JSON.parse(JSON.stringify(zigbeeData));
       zd.type = 'Coordinator';
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
   
       expect(z.maxAge).toBe(62321);
     });
@@ -530,7 +535,7 @@ describe('mk_zigbee2mqtt', () => {
 
       const zd = JSON.parse(JSON.stringify(zigbeeData));
       zd.type = 'Coordinator';
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
   
       expect(z.maxAge).toBe(6000);
     });
@@ -541,7 +546,7 @@ describe('mk_zigbee2mqtt', () => {
 
       const zd = JSON.parse(JSON.stringify(zigbeeData));
       zd.type = 'EndDevice';
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
   
       expect(z.maxAge).toBe(6435);
     });
@@ -551,28 +556,28 @@ describe('mk_zigbee2mqtt', () => {
 
       const zd = JSON.parse(JSON.stringify(zigbeeData));
       zd.type = 'EndDevice';
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
   
       expect(z.maxAge).toBe(90000);
     });
 
     it('should return unknown availability if not set', () => {
       const zd = JSON.parse(JSON.stringify(zigbeeData));
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
   
       expect(z.availability).toBe('unknown');
     });
 
     it('should return availability if set', () => {
       const zd = JSON.parse(JSON.stringify(zigbeeData));
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
       z.setAvailability('someavail');
       expect(z.availability).toBe('someavail');
     });
 
     it('should add batterylevel to spoolfile if battery level exists', () => {
       const zd = JSON.parse(JSON.stringify(zigbeeData));
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
       z.setState(zigbeeState);
 
       const spoolContents = mockWrite.mock.calls[0][1];
@@ -582,7 +587,7 @@ describe('mk_zigbee2mqtt', () => {
 
     it('should not add batterylevel to spoolfile if battery level does not exists', () => {
       const zd = JSON.parse(JSON.stringify(zigbeeData));
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
       z.setState(zigbeeState);
 
       const spoolContents = mockWrite.mock.calls[0][1];
@@ -592,7 +597,7 @@ describe('mk_zigbee2mqtt', () => {
 
     it('should write 0 if availability is online', () => {
       const zd = JSON.parse(JSON.stringify(zigbeeData));
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd,logger);
       z.setAvailability('online');
 
       const spoolContents = mockWrite.mock.calls[0][1];
@@ -602,7 +607,7 @@ describe('mk_zigbee2mqtt', () => {
 
     it('should write 2 if availability is offline', () => {
       const zd = JSON.parse(JSON.stringify(zigbeeData));
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
       z.setAvailability('offline');
 
       const spoolContents = mockWrite.mock.calls[0][1];
@@ -612,7 +617,7 @@ describe('mk_zigbee2mqtt', () => {
 
     it('should write 3 if availability is some state', () => {
       const zd = JSON.parse(JSON.stringify(zigbeeData));
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
       z.setAvailability('somestate');
 
       const spoolContents = mockWrite.mock.calls[0][1];
@@ -622,7 +627,7 @@ describe('mk_zigbee2mqtt', () => {
 
     it('should write 3 if availability is not set', () => {
       const zd = JSON.parse(JSON.stringify(zigbeeData));
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
       z.writeSpool();
 
       const spoolContents = mockWrite.mock.calls[0][1];
@@ -636,16 +641,58 @@ describe('mk_zigbee2mqtt', () => {
         callback(new Error('some error'))
       });
 
-      const mockError = jest.spyOn(console, 'error');
+      const mockError = jest.spyOn(logger, 'error');
 
       const zd = JSON.parse(JSON.stringify(zigbeeData));
-      const z = new ZigbeeDevice(zd);
+      const z = new ZigbeeDevice(zd, logger);
       z.writeSpool();
 
-      const errMsg = mockError.mock.calls[0][0];
+      const errMsg: any = mockError.mock.calls[0][0];
       expect(mockError).toHaveBeenCalled();
 
       expect(errMsg.message).toContain('some error')
     });
+
+    it('should first delete old spool files when it writes a new one', () => {
+
+      const mockGlob = jest.spyOn(globber,'globSync').mockReturnValue(['afile.txt']); 
+
+      jest.spyOn(fs, 'unlinkSync').mockImplementation();
+
+      const zd = JSON.parse(JSON.stringify(zigbeeData));
+      const z = new ZigbeeDevice(zd, logger);
+      z.writeSpool();
+
+      expect(mockGlob).toHaveBeenCalled();
+      expect(fs.unlinkSync).toHaveBeenCalled();
+      expect(fs.unlinkSync).toHaveBeenCalledWith('afile.txt');
+    });
+
+    it('should log an error if a unlinking error occurs', () => {
+
+      const mockGlob = jest.spyOn(globber,'globSync').mockReturnValue(['afile.txt']); 
+
+      jest.spyOn(fs, 'unlinkSync').mockImplementation(() => { throw new Error('some error')});
+
+      const mockError = jest.spyOn(logger, 'error');
+
+
+      const zd = JSON.parse(JSON.stringify(zigbeeData));
+      const z = new ZigbeeDevice(zd, logger);
+      z.writeSpool();
+
+      expect(mockGlob).toHaveBeenCalled();
+      expect(fs.unlinkSync).toHaveBeenCalled();
+      expect(fs.unlinkSync).toHaveBeenCalledWith('afile.txt');
+
+      const errMsg: any = mockError.mock.calls[0][0];
+      expect(mockError).toHaveBeenCalled();
+
+      expect(errMsg).toContain('some error')
+
+    });
+
+
+
   });
 });

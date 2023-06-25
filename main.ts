@@ -4,6 +4,8 @@ import assert from 'assert';
 import { globSync } from 'glob';
 import { createLogger, format, transports, Logger } from 'winston';
 
+// https://www.zigbee2mqtt.io/guide/configuration/device-availability.html
+
 function tryParseInt(str: string, defaultValue: number) {
   var retValue = defaultValue;
   if(str !== null) {

@@ -5,7 +5,6 @@ import * as dotenv from 'dotenv';
 import * as events from 'events';
 import fs from 'fs';
 import { ClientSubscribeCallback } from 'mqtt';
-import { createLogger, format, transports, Logger } from 'winston';
 
 import * as globber from 'glob';
 

@@ -115,11 +115,21 @@ export class ZigbeeDevice {
 
     lines.push(`${state} ${this.name} ${metrics.length ? metrics.join('|') : '-'} Zigbee device ${this.name} state is ${this.availability}`);
 
-    fs.writeFile(`${process.env.SPOOL_DIR}/${this.maxAge}_${this.name}.txt`, lines.join('\n')+'\n<<<<>>>>\n', err => {
+    const filename = `${process.env.SPOOL_DIR}/${this.maxAge}_${this.name}.txt`;
+
+    fs.writeFile(filename, lines.join('\n')+'\n<<<<>>>>\n', err => {
       if (err) {
         this.logger.error(err);
       }
     });
+
+    const time = new Date();
+    try {
+      fs.utimesSync(filename, time, time);
+    } catch (e) {
+      let fd = fs.openSync(filename, 'a');
+      fs.closeSync(fd);
+    }
   }
 }
 

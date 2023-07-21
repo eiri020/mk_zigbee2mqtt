@@ -27,6 +27,7 @@ echo $hostName, $serviceName, $state
 notify=$(cat <<EOF
 {
     "friendly_name": "$friendlyName",
+    "source": "checkmk",
     "token": "$HATOKEN",
     "NOTIFY_WHAT": "$NOTIFY_WHAT",
     "NOTIFY_SHORTDATETIME": "$NOTIFY_SHORTDATETIME",

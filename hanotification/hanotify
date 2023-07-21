@@ -28,7 +28,6 @@ notify=$(cat <<EOF
 {
     "friendly_name": "$friendlyName",
     "source": "checkmk",
-    "token": "$HATOKEN",
     "NOTIFY_WHAT": "$NOTIFY_WHAT",
     "NOTIFY_SHORTDATETIME": "$NOTIFY_SHORTDATETIME",
     "NOTIFY_HOSTNAME": "$NOTIFY_HOSTNAME",

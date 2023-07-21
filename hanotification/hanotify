@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# https://docs.checkmk.com/latest/en/notifications.html?_gl=1*ehte0u*_ga*MTAwOTI2NTk2MS4xNjgzOTYwNjU2*_ga_BMKR502ZHL*MTY4OTUwMDE2My40MS4xLjE2ODk1MDE0ODIuNjAuMC4w#scripts
+# https://www.home-assistant.io/docs/automation/trigger/#webhook-trigger
+# https://www.home-assistant.io/integrations/http/#http-sensors
+
+# Because checkmk seems to cache this script contents, we are not able to read env vars from relative located file
+# Home Assistance Long live access token
+HATOKEN=****
+HAURL=https://example.local.host:8123
+
+serviceName="${NOTIFY_SERVICEDESC//[^[:alnum:]]/_}"
+hostName="${NOTIFY_HOSTNAME//[^[:alnum:]]/_}"
+sensorName="cmk_${hostName}"
+friendlyName=${NOTIFY_HOSTNAME}
+
+state=$NOTIFY_HOSTSTATE
+
+if [ "$NOTIFY_WHAT" == "SERVICE" ]; then
+    state=$NOTIFY_SERVICESTATE
+    sensorName=${sensorName}_${serviceName}
+    friendlyName=${friendlyName} - ${NOTIFY_SERVICEDESC}
+fi
+
+echo $hostName, $serviceName, $state
+
+notify=$(cat <<EOF
+{
+    "friendly_name": "$friendlyName",
+    "token": "$HATOKEN",
+    "NOTIFY_WHAT": "$NOTIFY_WHAT",
+    "NOTIFY_SHORTDATETIME": "$NOTIFY_SHORTDATETIME",
+    "NOTIFY_HOSTNAME": "$NOTIFY_HOSTNAME",
+    "NOTIFY_HOSTOUTPUT": "$NOTIFY_HOSTOUTPUT",
+    "NOTIFY_HOSTSTATE": "$NOTIFY_HOSTSTATE",
+    "NOTIFY_NOTIFICATIONTYPE": "$NOTIFY_NOTIFICATIONTYPE",
+    "NOTIFY_SERVICEDESC": "$NOTIFY_SERVICEDESC",
+    "NOTIFY_SERVICEOUTPUT": "$NOTIFY_SERVICEOUTPUT",
+    "NOTIFY_SERVICESTATE": "$NOTIFY_SERVICESTATE"
+}
+EOF
+)
+
+sensor=$(cat <<EOF 
+{
+    "state": "$state",
+    "attributes": $notify
+}
+EOF
+)
+
+echo $sensor
+
+curl -X POST -H "Content-Type: application/json" -d "$notify" https://surabaya.eiri.nl:8123/api/webhook/checkmk
+
+
+curl --silent -X POST -H "Authorization: Bearer $HATOKEN" \
+      -H "Content-Type: application/json" \
+      -d "$sensor" \
+      $HAURL/api/states/sensor.${sensorName}
+
